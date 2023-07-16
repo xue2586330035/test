@@ -1,0 +1,69 @@
+//g++ main.cpp -o main -lopencv_highgui -lopencv_core -lopencv_imgproc -lopencv_objdetect -std=c++11 -lcurl -lcrypto -ljsoncpp
+//./main >> log.txt
+#include<iostream>
+#include "opencv2/opencv.hpp"
+#include "face.h"
+
+using namespace std;
+using namespace cv;
+using namespace aip;
+
+int main()
+
+{
+	VideoCapture cap(0); // 打开摄像头
+	if(!cap.isOpened())  // 检查是否成功
+	{
+		cout << "Camera open faild" << endl;
+		return 0;
+	}
+	cout << "Camera open success" << endl;    
+	    
+	CascadeClassifier Classifier ("/usr/share/opencv/haarcascades/haarcascade_frontalface_alt2.xml");//人脸识别。
+
+	// 设置APPID/AK/SK
+	aip::Face client("36208783", "fbY0t6so4x7DuzT2hBlc1AQx", "DqGcbOynp54VmGiWRsdWbWVRpsw7tqDX");
+ 
+	Mat ColorImage;//申请一个容器ColorImage存放所拍照片
+	Mat GrayImage;//申请一个容器GrayImage存放灰度照片
+	vector<Rect>AllFace;//申请一个容器AllFace存放矩形人脸
+	Mat MatFace;
+	vector<uchar>JpgFace;
+	string Base64Face;
+	Json::Value result;
+	time_t sec;
+
+	for(;;)
+	{        
+		cap >>ColorImage; // 拍照，完成后将照片存放在ColorImage中
+		cvtColor(ColorImage, GrayImage, CV_BGR2GRAY);//将ColorImage转换为灰度图
+		equalizeHist(GrayImage, GrayImage);//将GrayImage中的图像进行均衡化处理，处理完后再放到GrayImage中
+		Classifier.detectMultiScale(GrayImage, AllFace);//CascadeClassifier--级联分类器。使用detectMultiScale方法去检测GrayImage图像中的人脸，并将检测到的人脸以矩形列表的形式返回，并存入AllFace当中。
+		if(AllFace.size())//如果检测图像中有脸，则执行绘制矩形
+		{
+			rectangle(GrayImage,AllFace[0],Scalar(255,255,255));//在GrayImage上绘制矩形
+			MatFace = GrayImage(AllFace[0]);//人脸截取，存放到MatFace中
+			imencode(".jpg",MatFace,JpgFace);//将所截取的图转码为jpg格式，并存放到JpgFace中
+
+			Base64Face = base64_encode((char *)JpgFace.data(), JpgFace.size());
+			
+			result = client.search(Base64Face,  "BASE64","studying",aip::null);		
+			
+     			
+			if(!result["result"].isNull())
+			{
+				if(result["result"]["user_list"][0]["score"].asInt() > 70 )
+				{
+				cout << result["result"]["user_list"][0]["user_id"] << endl;
+				sec = time(NULL);
+				cout << ctime(&sec) << endl;////1970.01.01.00.00.00始	
+				putText(GrayImage,result["result"]["user_list"][0]["user_id"].asString(),Point(0,50),FONT_HERSHEY_SIMPLEX,1,Scalar(255,255,255));			
+				putText(GrayImage,ctime(&sec) ,Point(0,100),FONT_HERSHEY_SIMPLEX,1,Scalar(255,255,255));			
+				}		
+			}
+		}
+		imshow("video", GrayImage);//显示所拍的照片
+		waitKey(40);//暂停40毫秒
+	}
+	return 0;
+}
